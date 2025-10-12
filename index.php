@@ -123,6 +123,7 @@ if ($is_super_admin || $kd_dokter) {
             dpjp_ranap.no_rawat,
             reg_periksa.no_rkm_medis,
             pasien.nm_pasien,
+            penjab.png_jawab,
             dpjp_ranap.kd_dokter,
             dokter.nm_dokter,
             kamar_inap.diagnosa_awal,
@@ -137,6 +138,7 @@ if ($is_super_admin || $kd_dokter) {
             END as sudah_periksa
         FROM dpjp_ranap
         INNER JOIN reg_periksa ON dpjp_ranap.no_rawat = reg_periksa.no_rawat
+        INNER JOIN penjab ON reg_periksa.kd_pj = penjab.kd_pj
         INNER JOIN pasien ON reg_periksa.no_rkm_medis = pasien.no_rkm_medis
         INNER JOIN dokter ON dpjp_ranap.kd_dokter = dokter.kd_dokter
         INNER JOIN kamar_inap ON kamar_inap.no_rawat = reg_periksa.no_rawat
@@ -150,6 +152,7 @@ if ($is_super_admin || $kd_dokter) {
             dpjp_ranap.no_rawat,
             reg_periksa.no_rkm_medis,
             pasien.nm_pasien,
+            penjab.png_jawab,            
             kamar_inap.diagnosa_awal,
             kamar.kd_kamar,
             bangsal.nm_bangsal,
@@ -163,6 +166,7 @@ if ($is_super_admin || $kd_dokter) {
             END as sudah_periksa
         FROM dpjp_ranap
         INNER JOIN reg_periksa ON dpjp_ranap.no_rawat = reg_periksa.no_rawat
+        INNER JOIN penjab ON reg_periksa.kd_pj = penjab.kd_pj
         INNER JOIN pasien ON reg_periksa.no_rkm_medis = pasien.no_rkm_medis
         INNER JOIN kamar_inap ON kamar_inap.no_rawat = reg_periksa.no_rawat
         INNER JOIN kamar ON kamar_inap.kd_kamar = kamar.kd_kamar
@@ -381,6 +385,7 @@ if ($is_super_admin || $kd_dokter) {
                             <th>No. Rawat</th>
                             <th>No. RM</th>
                             <th>Nama Pasien</th>
+                            <th>Penjamin</th>
                             <?php if ($is_super_admin): ?>
                                 <th>Kode Dokter</th>
                                 <th>Nama Dokter</th>
@@ -403,6 +408,7 @@ if ($is_super_admin || $kd_dokter) {
                                 <td><?php echo htmlspecialchars($pasien['no_rawat']); ?></td>
                                 <td><?php echo htmlspecialchars($pasien['no_rkm_medis']); ?></td>
                                 <td><?php echo htmlspecialchars($pasien['nm_pasien']); ?></td>
+                                <td><?php echo htmlspecialchars($pasien['png_jawab']); ?></td>
                                 <?php if ($is_super_admin): ?>
                                     <td><?php echo htmlspecialchars($pasien['kd_dokter']); ?></td>
                                     <td><?php echo htmlspecialchars($pasien['nm_dokter']); ?></td>
