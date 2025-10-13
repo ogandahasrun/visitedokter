@@ -133,6 +133,12 @@ if ($is_super_admin || $kd_dokter) {
                 WHEN EXISTS (
                     SELECT 1 FROM pemeriksaan_ranap 
                     WHERE pemeriksaan_ranap.no_rawat = dpjp_ranap.no_rawat 
+                    AND pemeriksaan_ranap.nip IN (
+                        SELECT dokter.kd_dokter 
+                        FROM dokter 
+                        INNER JOIN dpjp_ranap d ON dokter.kd_dokter = d.kd_dokter 
+                        WHERE d.no_rawat = dpjp_ranap.no_rawat
+                    )
                     AND DATE(pemeriksaan_ranap.tgl_perawatan) = ?
                 ) THEN 1 ELSE 0 
             END as sudah_periksa
