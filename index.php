@@ -141,7 +141,14 @@ if ($is_super_admin || $kd_dokter) {
                     )
                     AND DATE(pemeriksaan_ranap.tgl_perawatan) = ?
                 ) THEN 1 ELSE 0 
-            END as sudah_periksa
+            END as sudah_periksa,
+            CASE 
+                WHEN DATE((
+                    SELECT MIN(tgl_masuk) 
+                    FROM kamar_inap ki2 
+                    WHERE ki2.no_rawat = dpjp_ranap.no_rawat
+                )) = CURDATE() THEN 1 ELSE 0 
+            END as pasien_baru_hari_ini
         FROM dpjp_ranap
         INNER JOIN reg_periksa ON dpjp_ranap.no_rawat = reg_periksa.no_rawat
         INNER JOIN penjab ON reg_periksa.kd_pj = penjab.kd_pj
@@ -169,7 +176,14 @@ if ($is_super_admin || $kd_dokter) {
                     AND pemeriksaan_ranap.nip = ?
                     AND DATE(pemeriksaan_ranap.tgl_perawatan) = ?
                 ) THEN 1 ELSE 0 
-            END as sudah_periksa
+            END as sudah_periksa,
+            CASE 
+                WHEN DATE((
+                    SELECT MIN(tgl_masuk) 
+                    FROM kamar_inap ki2 
+                    WHERE ki2.no_rawat = dpjp_ranap.no_rawat
+                )) = CURDATE() THEN 1 ELSE 0 
+            END as pasien_baru_hari_ini
         FROM dpjp_ranap
         INNER JOIN reg_periksa ON dpjp_ranap.no_rawat = reg_periksa.no_rawat
         INNER JOIN penjab ON reg_periksa.kd_pj = penjab.kd_pj
@@ -310,6 +324,10 @@ if ($is_super_admin || $kd_dokter) {
         background-color: #f8f9fa !important;
         color: #495057;
     }
+    .pasien-baru {
+        background-color: #cce7ff !important;
+        color: #004085;
+    }
     .info-box {
         background: #e7f3ff;
         border: 1px solid #b3d9ff;
@@ -341,6 +359,9 @@ if ($is_super_admin || $kd_dokter) {
     }
     .legend-putih {
         background-color: #f8f9fa;
+    }
+    .legend-biru {
+        background-color: #cce7ff;
     }
 </style>
 </head>
@@ -380,6 +401,10 @@ if ($is_super_admin || $kd_dokter) {
                 <div class="legend-color legend-putih"></div>
                 <span>Belum Diperiksa Hari Ini</span>
             </div>
+            <div class="legend-item">
+                <div class="legend-color legend-biru"></div>
+                <span>Pasien Baru Masuk Hari Ini</span>
+            </div>
         </div>
 
         <?php if (count($data_pasien) > 0): ?>
@@ -406,8 +431,14 @@ if ($is_super_admin || $kd_dokter) {
                         <?php 
                         $no = 1;
                         foreach ($data_pasien as $pasien): 
-                            $class = $pasien['sudah_periksa'] ? 'sudah-periksa' : 'belum-periksa';
-                            $status = $pasien['sudah_periksa'] ? 'Sudah Diperiksa' : 'Belum Diperiksa';
+                            // Prioritas pewarnaan: Pasien baru (biru) > Sudah periksa (hijau) > Belum periksa (putih)
+                            if ($pasien['pasien_baru_hari_ini']) {
+                                $class = 'pasien-baru';
+                                $status = $pasien['sudah_periksa'] ? 'Sudah Diperiksa (Pasien Baru)' : 'Belum Diperiksa (Pasien Baru)';
+                            } else {
+                                $class = $pasien['sudah_periksa'] ? 'sudah-periksa' : 'belum-periksa';
+                                $status = $pasien['sudah_periksa'] ? 'Sudah Diperiksa' : 'Belum Diperiksa';
+                            }
                         ?>
                             <tr class="<?php echo $class; ?>">
                                 <td><?php echo $no++; ?></td>
