@@ -158,7 +158,7 @@ if ($is_super_admin || $kd_dokter) {
         INNER JOIN kamar ON kamar_inap.kd_kamar = kamar.kd_kamar
         INNER JOIN bangsal ON kamar.kd_bangsal = bangsal.kd_bangsal
         WHERE kamar_inap.stts_pulang = '-'
-        ORDER BY bangsal.nm_bangsal, kamar.kd_kamar";
+        ORDER BY dokter.nm_dokter";
     } else {
         // Query untuk dokter biasa - hanya data pasien mereka
         $query_pasien = "SELECT DISTINCT
