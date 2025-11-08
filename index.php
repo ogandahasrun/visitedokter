@@ -408,6 +408,47 @@ if ($is_super_admin || $kd_dokter) {
         </div>
 
         <?php if (count($data_pasien) > 0): ?>
+            <?php
+            // Hitung jumlah berdasarkan status
+            $jumlah_belum_periksa = 0;  // putih
+            $jumlah_sudah_periksa = 0;  // hijau
+            $jumlah_pasien_baru = 0;    // biru
+            
+            foreach ($data_pasien as $pasien) {
+                if ($pasien['pasien_baru_hari_ini']) {
+                    $jumlah_pasien_baru++;
+                } else if ($pasien['sudah_periksa']) {
+                    $jumlah_sudah_periksa++;
+                } else {
+                    $jumlah_belum_periksa++;
+                }
+            }
+            ?>
+            
+            <div class="resume-container" style="background: #f8f9fa; border: 1px solid #dee2e6; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="margin-top: 0; color: #495057; text-align: center;">Resume Status Pasien</h3>
+                <div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 15px;">
+                    <div style="text-align: center; background: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); min-width: 120px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #495057; margin-bottom: 5px;"><?php echo $jumlah_belum_periksa; ?></div>
+                        <div style="font-size: 14px; color: #6c757d;">Belum Diperiksa</div>
+                        <div style="width: 30px; height: 15px; background-color: #f8f9fa; border: 1px solid #ccc; margin: 8px auto; border-radius: 3px;"></div>
+                    </div>
+                    <div style="text-align: center; background: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); min-width: 120px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #155724; margin-bottom: 5px;"><?php echo $jumlah_sudah_periksa; ?></div>
+                        <div style="font-size: 14px; color: #6c757d;">Sudah Diperiksa</div>
+                        <div style="width: 30px; height: 15px; background-color: #d4edda; border: 1px solid #ccc; margin: 8px auto; border-radius: 3px;"></div>
+                    </div>
+                    <div style="text-align: center; background: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); min-width: 120px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #004085; margin-bottom: 5px;"><?php echo $jumlah_pasien_baru; ?></div>
+                        <div style="font-size: 14px; color: #6c757d;">Pasien Baru</div>
+                        <div style="width: 30px; height: 15px; background-color: #cce7ff; border: 1px solid #ccc; margin: 8px auto; border-radius: 3px;"></div>
+                    </div>
+                </div>
+                <div style="text-align: center; margin-top: 15px; padding-top: 15px; border-top: 1px solid #dee2e6;">
+                    <strong>Total Semua Pasien: <?php echo count($data_pasien); ?></strong>
+                </div>
+            </div>
+
             <div class="table-container">
                 <table>
                     <thead>
