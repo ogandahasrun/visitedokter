@@ -1,527 +1,597 @@
 <?php
-// Security headers
-header('X-Content-Type-Options: nosniff');
-header('X-Frame-Options: DENY');
-header('X-XSS-Protection: 1; mode=block');
+require_once 'auth.php';
 
-session_start();
+// Hitung rekap pasien hari ini untuk 3 menu utama
+$count_ralan = 0;
+$count_ranap = 0;
+$count_operasi = 0;
 
-// Set timezone Indonesia (Jakarta) untuk memastikan tanggal yang benar
-date_default_timezone_set('Asia/Jakarta');
+if ($is_super_admin) {
+    // 1. Rawat Jalan Hari Ini
+    $q1 = mysqli_query($koneksi, "SELECT COUNT(*) as total FROM reg_periksa WHERE tgl_registrasi = CURDATE() AND status_lanjut = 'Ralan'");
+    if ($q1) {
+        $count_ralan = (int)mysqli_fetch_assoc($q1)['total'];
+    }
 
-// Regenerate session ID to prevent session fixation
-if (!isset($_SESSION['regenerated'])) {
-    session_regenerate_id(true);
-    $_SESSION['regenerated'] = true;
-}
+    // 2. Rawat Inap Aktif
+    $q2 = mysqli_query($koneksi, "SELECT COUNT(DISTINCT dpjp_ranap.no_rawat) as total FROM dpjp_ranap INNER JOIN kamar_inap ON kamar_inap.no_rawat = dpjp_ranap.no_rawat WHERE kamar_inap.stts_pulang = '-'");
+    if ($q2) {
+        $count_ranap = (int)mysqli_fetch_assoc($q2)['total'];
+    }
 
-include 'koneksi.php';
+    // 3. Jadwal Operasi Hari Ini
+    $q3 = mysqli_query($koneksi, "SELECT COUNT(*) as total FROM booking_operasi WHERE tanggal = CURDATE()");
+    if ($q3) {
+        $count_operasi = (int)mysqli_fetch_assoc($q3)['total'];
+    }
+} else if ($kd_dokter) {
+    // 1. Rawat Jalan Hari Ini (Dokter)
+    $stmt1 = mysqli_prepare($koneksi, "SELECT COUNT(*) as total FROM reg_periksa WHERE tgl_registrasi = CURDATE() AND status_lanjut = 'Ralan' AND kd_dokter = ?");
+    if ($stmt1) {
+        mysqli_stmt_bind_param($stmt1, "s", $kd_dokter);
+        mysqli_stmt_execute($stmt1);
+        $res1 = mysqli_stmt_get_result($stmt1);
+        if ($row1 = mysqli_fetch_assoc($res1)) {
+            $count_ralan = (int)$row1['total'];
+        }
+        mysqli_stmt_close($stmt1);
+    }
 
-// Check if user is logged in
-if (!isset($_SESSION['username']) || empty($_SESSION['username'])) {
-    session_destroy();
-    header('Location: login.php');
-    exit();
-}
+    // 2. Rawat Inap Aktif (Dokter DPJP)
+    $stmt2 = mysqli_prepare($koneksi, "SELECT COUNT(DISTINCT dpjp_ranap.no_rawat) as total FROM dpjp_ranap INNER JOIN kamar_inap ON kamar_inap.no_rawat = dpjp_ranap.no_rawat WHERE kamar_inap.stts_pulang = '-' AND dpjp_ranap.kd_dokter = ?");
+    if ($stmt2) {
+        mysqli_stmt_bind_param($stmt2, "s", $kd_dokter);
+        mysqli_stmt_execute($stmt2);
+        $res2 = mysqli_stmt_get_result($stmt2);
+        if ($row2 = mysqli_fetch_assoc($res2)) {
+            $count_ranap = (int)$row2['total'];
+        }
+        mysqli_stmt_close($stmt2);
+    }
 
-// Validate session timeout (optional - 1 hour)
-if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > 3600)) {
-    session_unset();
-    session_destroy();
-    header('Location: login.php?timeout=1');
-    exit();
-}
-$_SESSION['last_activity'] = time();
-
-// Generate CSRF token if not exists
-if (!isset($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-
-// Ambil data instansi dari database
-$query_instansi = "SELECT nama_instansi, logo FROM setting LIMIT 1";
-$result_instansi = mysqli_query($koneksi, $query_instansi);
-$nama_instansi = "RSUD PRINGSEWU";
-$logo_src = "images/logo.png"; // default jika tidak ada di database
-
-if ($row_instansi = mysqli_fetch_assoc($result_instansi)) {
-    $nama_instansi = $row_instansi['nama_instansi'];
-    if (!empty($row_instansi['logo'])) {
-        // Konversi BLOB ke base64
-        $logo_blob = $row_instansi['logo'];
-        $logo_base64 = base64_encode($logo_blob);
-        $logo_src = "data:image/png;base64," . $logo_base64;
+    // 3. Jadwal Operasi Hari Ini (Dokter)
+    $stmt3 = mysqli_prepare($koneksi, "SELECT COUNT(*) as total FROM booking_operasi WHERE tanggal = CURDATE() AND kd_dokter = ?");
+    if ($stmt3) {
+        mysqli_stmt_bind_param($stmt3, "s", $kd_dokter);
+        mysqli_stmt_execute($stmt3);
+        $res3 = mysqli_stmt_get_result($stmt3);
+        if ($row3 = mysqli_fetch_assoc($res3)) {
+            $count_operasi = (int)$row3['total'];
+        }
+        mysqli_stmt_close($stmt3);
     }
 }
 
-// Sanitize and validate username input
-$username = filter_var(trim($_SESSION['username']), FILTER_SANITIZE_STRING);
+// Format tanggal Indonesia
+$hari_list = ['Sunday' => 'Minggu', 'Monday' => 'Senin', 'Tuesday' => 'Selasa', 'Wednesday' => 'Rabu', 'Thursday' => 'Kamis', 'Friday' => 'Jumat', 'Saturday' => 'Sabtu'];
+$bulan_list = [1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
-if (empty($username) || strlen($username) > 50) {
-    session_destroy();
-    header('Location: login.php?error=invalid_session');
-    exit();
-}
-
-// Ambil nama pegawai berdasarkan username (NIK) yang login
-$query_pegawai = "SELECT nama FROM pegawai WHERE nik = ? LIMIT 1";
-$stmt = mysqli_prepare($koneksi, $query_pegawai);
-
-if ($stmt === false) {
-    error_log('Database prepare failed: ' . mysqli_error($koneksi));
-    die('Database error occurred. Please try again later.');
-}
-
-mysqli_stmt_bind_param($stmt, "s", $username);
-mysqli_stmt_execute($stmt);
-$result_pegawai = mysqli_stmt_get_result($stmt);
-$nama_pegawai = $username; // default jika tidak ditemukan
-
-if ($row_pegawai = mysqli_fetch_assoc($result_pegawai)) {
-    $nama_pegawai = $row_pegawai['nama'];
-}
-mysqli_stmt_close($stmt);
-
-// Ambil kd_dokter berdasarkan username yang login (asumsi username = kd_dokter)
-// Atau bisa juga menggunakan kolom lain yang sesuai dengan struktur database
-$query_dokter = "SELECT kd_dokter FROM dokter WHERE kd_dokter = ? LIMIT 1";
-$stmt_dokter = mysqli_prepare($koneksi, $query_dokter);
-
-if ($stmt_dokter === false) {
-    error_log('Database prepare failed for dokter query: ' . mysqli_error($koneksi));
-    // Jika query gagal, coba dengan asumsi langsung bahwa username = kd_dokter (dengan validasi)
-    $kd_dokter = preg_match('/^[A-Za-z0-9_-]+$/', $username) ? $username : null;
-} else {
-    mysqli_stmt_bind_param($stmt_dokter, "s", $username);
-    mysqli_stmt_execute($stmt_dokter);
-    $result_dokter = mysqli_stmt_get_result($stmt_dokter);
-    $kd_dokter = null;
-
-    if ($row_dokter = mysqli_fetch_assoc($result_dokter)) {
-        $kd_dokter = $row_dokter['kd_dokter'];
-    } else {
-        // Jika tidak ditemukan, coba asumsi langsung username = kd_dokter (dengan validasi)
-        $kd_dokter = preg_match('/^[A-Za-z0-9_-]+$/', $username) ? $username : null;
-    }
-    mysqli_stmt_close($stmt_dokter);
-}
-
-// Query untuk mengambil data pasien DPJP dengan status pemeriksaan hari ini
-// Pastikan timezone sudah di-set untuk tanggal yang akurat
-$tanggal_hari_ini = date('Y-m-d');
-$data_pasien = array();
-
-// Cek apakah user adalah super admin (ID = 170985)
-$is_super_admin = ($username == '170985');
-
-// Jika super admin, ambil semua data. Jika dokter biasa, hanya data mereka
-if ($is_super_admin || $kd_dokter) {
-    
-    if ($is_super_admin) {
-        // Query untuk super admin - melihat SEMUA data pasien rawat inap
-        $query_pasien = "SELECT DISTINCT
-            dpjp_ranap.no_rawat,
-            reg_periksa.no_rkm_medis,
-            pasien.nm_pasien,
-            penjab.png_jawab,
-            dpjp_ranap.kd_dokter,
-            dokter.nm_dokter,
-            kamar_inap.diagnosa_awal,
-            kamar.kd_kamar,
-            bangsal.nm_bangsal,
-            CASE 
-                WHEN EXISTS (
-                    SELECT 1 FROM pemeriksaan_ranap 
-                    WHERE pemeriksaan_ranap.no_rawat = dpjp_ranap.no_rawat 
-                    AND pemeriksaan_ranap.nip IN (
-                        SELECT dokter.kd_dokter 
-                        FROM dokter 
-                        INNER JOIN dpjp_ranap d ON dokter.kd_dokter = d.kd_dokter 
-                        WHERE d.no_rawat = dpjp_ranap.no_rawat
-                    )
-                    AND DATE(pemeriksaan_ranap.tgl_perawatan) = ?
-                ) THEN 1 ELSE 0 
-            END as sudah_periksa,
-            CASE 
-                WHEN DATE((
-                    SELECT MIN(tgl_masuk) 
-                    FROM kamar_inap ki2 
-                    WHERE ki2.no_rawat = dpjp_ranap.no_rawat
-                )) = CURDATE() THEN 1 ELSE 0 
-            END as pasien_baru_hari_ini
-        FROM dpjp_ranap
-        INNER JOIN reg_periksa ON dpjp_ranap.no_rawat = reg_periksa.no_rawat
-        INNER JOIN penjab ON reg_periksa.kd_pj = penjab.kd_pj
-        INNER JOIN pasien ON reg_periksa.no_rkm_medis = pasien.no_rkm_medis
-        INNER JOIN dokter ON dpjp_ranap.kd_dokter = dokter.kd_dokter
-        INNER JOIN kamar_inap ON kamar_inap.no_rawat = reg_periksa.no_rawat
-        INNER JOIN kamar ON kamar_inap.kd_kamar = kamar.kd_kamar
-        INNER JOIN bangsal ON kamar.kd_bangsal = bangsal.kd_bangsal
-        WHERE kamar_inap.stts_pulang = '-'
-        ORDER BY dokter.nm_dokter";
-    } else {
-        // Query untuk dokter biasa - hanya data pasien mereka
-        $query_pasien = "SELECT DISTINCT
-            dpjp_ranap.no_rawat,
-            reg_periksa.no_rkm_medis,
-            pasien.nm_pasien,
-            penjab.png_jawab,            
-            kamar_inap.diagnosa_awal,
-            kamar.kd_kamar,
-            bangsal.nm_bangsal,
-            CASE 
-                WHEN EXISTS (
-                    SELECT 1 FROM pemeriksaan_ranap 
-                    WHERE pemeriksaan_ranap.no_rawat = dpjp_ranap.no_rawat 
-                    AND pemeriksaan_ranap.nip = ?
-                    AND DATE(pemeriksaan_ranap.tgl_perawatan) = ?
-                ) THEN 1 ELSE 0 
-            END as sudah_periksa,
-            CASE 
-                WHEN DATE((
-                    SELECT MIN(tgl_masuk) 
-                    FROM kamar_inap ki2 
-                    WHERE ki2.no_rawat = dpjp_ranap.no_rawat
-                )) = CURDATE() THEN 1 ELSE 0 
-            END as pasien_baru_hari_ini
-        FROM dpjp_ranap
-        INNER JOIN reg_periksa ON dpjp_ranap.no_rawat = reg_periksa.no_rawat
-        INNER JOIN penjab ON reg_periksa.kd_pj = penjab.kd_pj
-        INNER JOIN pasien ON reg_periksa.no_rkm_medis = pasien.no_rkm_medis
-        INNER JOIN kamar_inap ON kamar_inap.no_rawat = reg_periksa.no_rawat
-        INNER JOIN kamar ON kamar_inap.kd_kamar = kamar.kd_kamar
-        INNER JOIN bangsal ON kamar.kd_bangsal = bangsal.kd_bangsal
-        WHERE kamar_inap.stts_pulang = '-' 
-        AND dpjp_ranap.kd_dokter = ?
-        ORDER BY bangsal.nm_bangsal, kamar.kd_kamar";
-    }
-    
-    $stmt_pasien = mysqli_prepare($koneksi, $query_pasien);
-    
-    if ($stmt_pasien === false) {
-        error_log('Database prepare failed for pasien query: ' . mysqli_error($koneksi));
-        die('Database error occurred. Please try again later.');
-    }
-    
-    if ($is_super_admin) {
-        // Super admin hanya perlu parameter tanggal
-        mysqli_stmt_bind_param($stmt_pasien, "s", $tanggal_hari_ini);
-    } else {
-        // Dokter biasa perlu parameter nip, tanggal, dan kd_dokter
-        mysqli_stmt_bind_param($stmt_pasien, "sss", $username, $tanggal_hari_ini, $kd_dokter);
-    }
-    mysqli_stmt_execute($stmt_pasien);
-    $result_pasien = mysqli_stmt_get_result($stmt_pasien);
-    
-    while ($row = mysqli_fetch_assoc($result_pasien)) {
-        $data_pasien[] = $row;
-    }
-    mysqli_stmt_close($stmt_pasien);
-}
+$hari_ini = $hari_list[date('l')];
+$tgl_indo = date('j') . ' ' . $bulan_list[(int)date('n')] . ' ' . date('Y');
 ?>
-
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?php echo htmlspecialchars($nama_instansi); ?> - Dashboard</title>
-<style>
-    body {
-        background: linear-gradient(to right, #00c6ff, #0072ff);
-        font-family: Arial, sans-serif;
-        margin: 0;
-        padding: 0;
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-    }
-    .logo-container {
-        text-align: center;
-        margin-bottom: 30px;
-        margin-top: 30px;
-    }
-    .logo-container img {
-        border-radius: 10px;
-        box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-    .instansi-name {
-        font-size: 24px;
-        font-weight: bold;
-        color: white;
-        margin-top: 15px;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-    }
-    .container {
-        max-width: 800px;
-        margin: 0 auto;
-        padding: 30px;
-        background: white;
-        border-radius: 10px;
-        box-shadow: 0 0 20px rgba(0,0,0,0.2);
-        flex: 1;
-        margin-bottom: 30px;
-    }
-    .container h1 {
-        text-align: center;
-        color: #333;
-        margin-bottom: 20px;
-    }
-    .container p {
-        font-size: 18px;
-        color: #666;
-        text-align: center;
-        margin-bottom: 30px;
-    }
-    .logout {
-        display: block;
-        width: 200px;
-        margin: 0 auto;
-        padding: 12px;
-        background: #dc3545;
-        color: white;
-        text-decoration: none;
-        text-align: center;
-        border-radius: 5px;
-        font-size: 16px;
-        transition: background 0.3s;
-    }
-    .logout:hover {
-        background: #c82333;
-    }
-    footer {
-        background: rgba(255,255,255,0.1);
-        color: white;
-        text-align: center;
-        padding: 15px;
-        margin-top: auto;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-    }
-    .table-container {
-        margin: 20px 0;
-        overflow-x: auto;
-    }
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 20px;
-    }
-    table th, table td {
-        padding: 12px;
-        text-align: left;
-        border: 1px solid #ddd;
-    }
-    table th {
-        background-color: #007bff;
-        color: white;
-        font-weight: bold;
-    }
-    .sudah-periksa {
-        background-color: #d4edda !important;
-        color: #155724;
-    }
-    .belum-periksa {
-        background-color: #f8f9fa !important;
-        color: #495057;
-    }
-    .pasien-baru {
-        background-color: #cce7ff !important;
-        color: #004085;
-    }
-    .info-box {
-        background: #e7f3ff;
-        border: 1px solid #b3d9ff;
-        padding: 15px;
-        margin: 20px 0;
-        border-radius: 5px;
-        text-align: center;
-    }
-    .status-legend {
-        display: flex;
-        justify-content: center;
-        gap: 20px;
-        margin: 15px 0;
-        flex-wrap: wrap;
-    }
-    .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .legend-color {
-        width: 20px;
-        height: 20px;
-        border: 1px solid #ccc;
-        border-radius: 3px;
-    }
-    .legend-hijau {
-        background-color: #d4edda;
-    }
-    .legend-putih {
-        background-color: #f8f9fa;
-    }
-    .legend-biru {
-        background-color: #cce7ff;
-    }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Menu Utama - <?php echo htmlspecialchars($nama_instansi); ?></title>
+    <style>
+        :root {
+            --bg-page: #f0f4f9;
+            --text-dark: #0f172a;
+            --text-muted: #64748b;
+            --radius-lg: 20px;
+            --radius-md: 14px;
+            --shadow-card: 0 4px 16px rgba(15, 23, 42, 0.08);
+            --shadow-hover: 0 8px 24px rgba(15, 23, 42, 0.12);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(180deg, #e0f2fe 0%, #f0f4f9 220px, #f0f4f9 100%);
+            color: var(--text-dark);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            line-height: 1.5;
+        }
+
+        /* Top Header */
+        .header-top {
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            max-width: 680px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .brand-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .hospital-logo {
+            width: 44px;
+            height: 48px;
+            object-fit: contain;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+        }
+
+        .brand-text h1 {
+            font-size: 17px;
+            font-weight: 800;
+            color: #0369a1;
+            letter-spacing: -0.3px;
+            line-height: 1.2;
+        }
+
+        .brand-text p {
+            font-size: 11px;
+            font-weight: 600;
+            color: #0284c7;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-logout-icon {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: white;
+            color: #ef4444;
+            border: 1px solid #fecaca;
+            padding: 8px 12px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            transition: all 0.2s;
+        }
+        .btn-logout-icon:active {
+            transform: scale(0.95);
+            background: #fee2e2;
+        }
+
+        /* Container */
+        .content-wrap {
+            max-width: 680px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 0 16px 24px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        /* Profile Welcome Card */
+        .welcome-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            padding: 18px 20px;
+            box-shadow: var(--shadow-card);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .welcome-card::after {
+            content: "";
+            position: absolute;
+            right: -20px;
+            top: -20px;
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, rgba(14, 165, 233, 0.15) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .user-avatar {
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            flex-shrink: 0;
+            box-shadow: 0 4px 10px rgba(2, 132, 199, 0.3);
+        }
+
+        .welcome-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .welcome-greeting {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .user-name {
+            font-size: 17px;
+            font-weight: 800;
+            color: var(--text-dark);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin: 2px 0 4px;
+        }
+
+        .role-tag-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .role-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+        .role-badge.admin {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        .role-badge.dokter {
+            background: #e0f2fe;
+            color: #0284c7;
+        }
+
+        .time-chip {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        /* Section Heading */
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 4px;
+            padding: 0 4px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: #475569;
+        }
+
+        .today-chip {
+            font-size: 12px;
+            font-weight: 600;
+            color: #0369a1;
+            background: #e0f2fe;
+            padding: 3px 10px;
+            border-radius: 999px;
+        }
+
+        /* 3 Main Menu Cards Grid */
+        .menu-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .menu-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            padding: 18px 20px;
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            box-shadow: var(--shadow-card);
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .menu-card:active {
+            transform: scale(0.98);
+        }
+
+        .menu-card:hover {
+            box-shadow: var(--shadow-hover);
+            border-color: #cbd5e1;
+        }
+
+        /* Distinct theme colors for the 3 menus */
+        /* 1. Rawat Jalan: Emerald Green */
+        .menu-card.card-ralan {
+            border-left: 6px solid #059669;
+        }
+        .menu-card.card-ralan .menu-icon-box {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        .menu-card.card-ralan .count-badge {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        /* 2. Rawat Inap: Royal Sky Blue */
+        .menu-card.card-ranap {
+            border-left: 6px solid #0284c7;
+        }
+        .menu-card.card-ranap .menu-icon-box {
+            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+        }
+        .menu-card.card-ranap .count-badge {
+            background: #e0f2fe;
+            color: #075985;
+        }
+
+        /* 3. Jadwal Operasi: Vivid Violet */
+        .menu-card.card-operasi {
+            border-left: 6px solid #7c3aed;
+        }
+        .menu-card.card-operasi .menu-icon-box {
+            background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+        }
+        .menu-card.card-operasi .count-badge {
+            background: #ede9fe;
+            color: #5b21b6;
+        }
+
+        .menu-icon-box {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            flex-shrink: 0;
+        }
+        .menu-icon-box svg {
+            width: 28px;
+            height: 28px;
+        }
+
+        .menu-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .menu-title-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .menu-title {
+            font-size: 18px;
+            font-weight: 800;
+            color: #0f172a;
+        }
+
+        .count-badge {
+            font-size: 12px;
+            font-weight: 700;
+            padding: 3px 9px;
+            border-radius: 999px;
+            white-space: nowrap;
+        }
+
+        .menu-desc {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.35;
+        }
+
+        .menu-arrow {
+            color: #94a3b8;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s;
+        }
+
+        .menu-card:hover .menu-arrow {
+            transform: translateX(4px);
+            color: #0f172a;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 20px 16px;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: auto;
+        }
+
+        /* Media Queries */
+        @media (min-width: 640px) {
+            .menu-grid {
+                gap: 16px;
+            }
+            .menu-card {
+                padding: 20px 24px;
+            }
+        }
+    </style>
 </head>
 <body>
 
-<div class="logo-container">
-    <a href="index.php">
-        <img src="<?php echo $logo_src; ?>" alt="Logo" width="100" height="120">
+<!-- Top Bar -->
+<header class="header-top">
+    <a href="index.php" class="brand-container">
+        <img src="<?php echo $logo_src; ?>" alt="Logo" class="hospital-logo">
+        <div class="brand-text">
+            <h1><?php echo htmlspecialchars($nama_instansi); ?></h1>
+            <p>Sistem Layanan Dokter</p>
+        </div>
     </a>
-    <div class="instansi-name"><?php echo htmlspecialchars($nama_instansi); ?></div>
-</div>
-
-<div class="container">
-    <h1>Dashboard DPJP</h1>
-    <p>Selamat Datang, <?php echo htmlspecialchars($nama_pegawai); ?>!</p>
-    
-    <?php if ($is_super_admin || $kd_dokter): ?>
-        <div class="info-box">
-            <strong>Tanggal:</strong> <?php echo date('d/m/Y'); ?> | 
-            <strong>Waktu:</strong> <?php echo date('H:i:s'); ?> | 
-            <strong>Timezone:</strong> <?php echo date_default_timezone_get(); ?><br>
-            <?php if ($is_super_admin): ?>
-                <strong>Status:</strong> <span style="color: #dc3545; font-weight: bold;">SUPER ADMIN - Akses Semua Data</span> |
-                <strong>Total Pasien Rawat Inap:</strong> <?php echo count($data_pasien); ?>
-            <?php else: ?>
-                <strong>Kode Dokter:</strong> <?php echo htmlspecialchars($kd_dokter); ?> |
-                <strong>Total Pasien:</strong> <?php echo count($data_pasien); ?>
-            <?php endif; ?>
-        </div>
-        
-        <div class="status-legend">
-            <div class="legend-item">
-                <div class="legend-color legend-hijau"></div>
-                <span>Sudah Diperiksa Hari Ini</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color legend-putih"></div>
-                <span>Belum Diperiksa Hari Ini</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color legend-biru"></div>
-                <span>Pasien Baru Masuk Hari Ini</span>
-            </div>
-        </div>
-
-        <?php if (count($data_pasien) > 0): ?>
-            <?php
-            // Hitung jumlah berdasarkan status
-            $jumlah_belum_periksa = 0;  // putih
-            $jumlah_sudah_periksa = 0;  // hijau
-            $jumlah_pasien_baru = 0;    // biru
-            
-            foreach ($data_pasien as $pasien) {
-                if ($pasien['pasien_baru_hari_ini']) {
-                    $jumlah_pasien_baru++;
-                } else if ($pasien['sudah_periksa']) {
-                    $jumlah_sudah_periksa++;
-                } else {
-                    $jumlah_belum_periksa++;
-                }
-            }
-            ?>
-            
-            <div class="resume-container" style="background: #f8f9fa; border: 1px solid #dee2e6; padding: 20px; margin: 20px 0; border-radius: 8px;">
-                <h3 style="margin-top: 0; color: #495057; text-align: center;">Resume Status Pasien</h3>
-                <div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 15px;">
-                    <div style="text-align: center; background: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); min-width: 120px;">
-                        <div style="font-size: 24px; font-weight: bold; color: #495057; margin-bottom: 5px;"><?php echo $jumlah_belum_periksa; ?></div>
-                        <div style="font-size: 14px; color: #6c757d;">Belum Diperiksa</div>
-                        <div style="width: 30px; height: 15px; background-color: #f8f9fa; border: 1px solid #ccc; margin: 8px auto; border-radius: 3px;"></div>
-                    </div>
-                    <div style="text-align: center; background: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); min-width: 120px;">
-                        <div style="font-size: 24px; font-weight: bold; color: #155724; margin-bottom: 5px;"><?php echo $jumlah_sudah_periksa; ?></div>
-                        <div style="font-size: 14px; color: #6c757d;">Sudah Diperiksa</div>
-                        <div style="width: 30px; height: 15px; background-color: #d4edda; border: 1px solid #ccc; margin: 8px auto; border-radius: 3px;"></div>
-                    </div>
-                    <div style="text-align: center; background: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); min-width: 120px;">
-                        <div style="font-size: 24px; font-weight: bold; color: #004085; margin-bottom: 5px;"><?php echo $jumlah_pasien_baru; ?></div>
-                        <div style="font-size: 14px; color: #6c757d;">Pasien Baru</div>
-                        <div style="width: 30px; height: 15px; background-color: #cce7ff; border: 1px solid #ccc; margin: 8px auto; border-radius: 3px;"></div>
-                    </div>
-                </div>
-                <div style="text-align: center; margin-top: 15px; padding-top: 15px; border-top: 1px solid #dee2e6;">
-                    <strong>Total Semua Pasien: <?php echo count($data_pasien); ?></strong>
-                </div>
-            </div>
-
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>No</th>
-                            <th>No. Rawat</th>
-                            <th>No. RM</th>
-                            <th>Nama Pasien</th>
-                            <th>Penjamin</th>
-                            <?php if ($is_super_admin): ?>
-                                <th>Kode Dokter</th>
-                                <th>Nama Dokter</th>
-                            <?php endif; ?>
-                            <th>Bangsal</th>
-                            <th>Kamar</th>
-                            <th>Diagnosa Awal</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php 
-                        $no = 1;
-                        foreach ($data_pasien as $pasien): 
-                            // Prioritas pewarnaan: Pasien baru (biru) > Sudah periksa (hijau) > Belum periksa (putih)
-                            if ($pasien['pasien_baru_hari_ini']) {
-                                $class = 'pasien-baru';
-                                $status = $pasien['sudah_periksa'] ? 'Sudah Diperiksa (Pasien Baru)' : 'Belum Diperiksa (Pasien Baru)';
-                            } else {
-                                $class = $pasien['sudah_periksa'] ? 'sudah-periksa' : 'belum-periksa';
-                                $status = $pasien['sudah_periksa'] ? 'Sudah Diperiksa' : 'Belum Diperiksa';
-                            }
-                        ?>
-                            <tr class="<?php echo $class; ?>">
-                                <td><?php echo $no++; ?></td>
-                                <td><?php echo htmlspecialchars($pasien['no_rawat']); ?></td>
-                                <td><?php echo htmlspecialchars($pasien['no_rkm_medis']); ?></td>
-                                <td><?php echo htmlspecialchars($pasien['nm_pasien']); ?></td>
-                                <td><?php echo htmlspecialchars($pasien['png_jawab']); ?></td>
-                                <?php if ($is_super_admin): ?>
-                                    <td><?php echo htmlspecialchars($pasien['kd_dokter']); ?></td>
-                                    <td><?php echo htmlspecialchars($pasien['nm_dokter']); ?></td>
-                                <?php endif; ?>
-                                <td><?php echo htmlspecialchars($pasien['nm_bangsal']); ?></td>
-                                <td><?php echo htmlspecialchars($pasien['kd_kamar']); ?></td>
-                                <td><?php echo htmlspecialchars($pasien['diagnosa_awal']); ?></td>
-                                <td><?php echo $status; ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        <?php else: ?>
-            <div class="info-box">
-                <p>Tidak ada pasien yang menjadi tanggung jawab Anda saat ini.</p>
-            </div>
-        <?php endif; ?>
-    <?php else: ?>
-        <div class="info-box">
-            <?php if ($is_super_admin): ?>
-                <p>Selamat datang Super Admin! Sistem siap menampilkan semua data pasien rawat inap.</p>
-            <?php else: ?>
-                <p>Anda tidak terdaftar sebagai dokter dalam sistem.</p>
-            <?php endif; ?>
-        </div>
-    <?php endif; ?>
-
-    <form method="POST" action="logout.php" style="display: inline;">
+    <form method="POST" action="logout.php" style="margin:0;">
         <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
-        <button type="submit" class="logout" style="border: none; cursor: pointer;">Logout</button>
+        <button type="submit" class="btn-logout-icon" title="Keluar dari sistem" onclick="return confirm('Apakah Anda yakin ingin logout?');">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+            <span>Keluar</span>
+        </button>
     </form>
-</div>
+</header>
 
-<footer>by IT <?php echo htmlspecialchars($nama_instansi); ?></footer>
+<main class="content-wrap">
+    <!-- User Profile Card -->
+    <div class="welcome-card">
+        <div class="user-avatar">
+            👨‍⚕️
+        </div>
+        <div class="welcome-info">
+            <div class="welcome-greeting">Selamat Datang</div>
+            <div class="user-name" title="<?php echo htmlspecialchars($nama_pegawai); ?>">
+                <?php echo htmlspecialchars($nama_pegawai); ?>
+            </div>
+            <div class="role-tag-row">
+                <?php if ($is_super_admin): ?>
+                    <span class="role-badge admin">SUPER ADMIN</span>
+                <?php else: ?>
+                    <span class="role-badge dokter">DOKTER DPJP</span>
+                <?php endif; ?>
+                <span class="time-chip">
+                    <?php echo $hari_ini; ?>, <?php echo $tgl_indo; ?> &bull; <span id="clockDisplay"><?php echo date('H:i'); ?></span> WIB
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section Heading -->
+    <div class="section-header">
+        <span class="section-title">Menu Utama</span>
+        <span class="today-chip">Hari Ini</span>
+    </div>
+
+    <!-- The 3 Primary Menus -->
+    <div class="menu-grid">
+        <!-- 1. Rawat Jalan -->
+        <a href="rawat_jalan.php" class="menu-card card-ralan">
+            <div class="menu-icon-box">
+                <!-- Stethoscope / Outpatient Icon -->
+                <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M4.5 3h15M6 3v5a6 6 0 0 0 12 0V3M12 14v4a4 4 0 0 0 4 4h1a2 2 0 0 0 2-2v-1.5a1.5 1.5 0 0 0-3 0v1.5"/>
+                    <circle cx="12" cy="14" r="1.5" fill="currentColor"/>
+                </svg>
+            </div>
+            <div class="menu-content">
+                <div class="menu-title-row">
+                    <span class="menu-title">Rawat Jalan</span>
+                    <span class="count-badge"><?php echo $count_ralan; ?> Pasien</span>
+                </div>
+                <div class="menu-desc">
+                    Pemeriksaan poliklinik, antrian pasien hari ini & status pemeriksaan
+                </div>
+            </div>
+            <div class="menu-arrow">
+                <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+            </div>
+        </a>
+
+        <!-- 2. Rawat Inap -->
+        <a href="rawat_inap.php" class="menu-card card-ranap">
+            <div class="menu-icon-box">
+                <!-- Bed / Inpatient Icon -->
+                <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M3 7v11M21 18V7M3 13h18M3 17h18"/>
+                    <circle cx="7" cy="10" r="2"/>
+                    <path d="M9 13v-3a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v3"/>
+                </svg>
+            </div>
+            <div class="menu-content">
+                <div class="menu-title-row">
+                    <span class="menu-title">Rawat Inap</span>
+                    <span class="count-badge"><?php echo $count_ranap; ?> Pasien</span>
+                </div>
+                <div class="menu-desc">
+                    Visite pasien DPJP aktif, rekap pemeriksaan harian & pasien baru
+                </div>
+            </div>
+            <div class="menu-arrow">
+                <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+            </div>
+        </a>
+
+        <!-- 3. Jadwal Operasi -->
+        <a href="jadwal_operasi.php" class="menu-card card-operasi">
+            <div class="menu-icon-box">
+                <!-- Scalpel / Operating Theater Icon -->
+                <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M14.5 4l5.5 5.5-12 12L2 22l.5-6 12-12z"/>
+                    <path d="M18 7.5l-2-2"/>
+                    <circle cx="18" cy="18" r="3"/>
+                    <path d="M18 15v6M15 18h6"/>
+                </svg>
+            </div>
+            <div class="menu-content">
+                <div class="menu-title-row">
+                    <span class="menu-title">Jadwal Operasi</span>
+                    <span class="count-badge"><?php echo $count_operasi; ?> Jadwal</span>
+                </div>
+                <div class="menu-desc">
+                    Jadwal & booking kamar operasi (OK), paket tindakan & operator
+                </div>
+            </div>
+            <div class="menu-arrow">
+                <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+            </div>
+        </a>
+    </div>
+</main>
+
+<footer>
+    &copy; <?php echo date('Y'); ?> IT <?php echo htmlspecialchars($nama_instansi); ?><br>
+    Sistem Informasi Pelayanan Pasien
+</footer>
+
+<script>
+    // Live Clock
+    setInterval(function() {
+        const d = new Date();
+        const h = String(d.getHours()).padStart(2, '0');
+        const m = String(d.getMinutes()).padStart(2, '0');
+        const el = document.getElementById('clockDisplay');
+        if (el) el.textContent = `${h}:${m}`;
+    }, 1000);
+</script>
 
 </body>
 </html>
