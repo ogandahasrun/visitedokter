@@ -55,6 +55,92 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['simpan_soapie'])) {
     }
 }
 
+// Proses Simpan Data Resume Pasien Ranap
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['simpan_resume'])) {
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        $pesan_error = "Token keamanan tidak valid. Silakan muat ulang halaman.";
+    } else {
+        $r_no_rawat            = mysqli_real_escape_string($koneksi, trim($_POST['no_rawat'] ?? ''));
+        $r_diagnosa_awal       = mysqli_real_escape_string($koneksi, trim($_POST['diagnosa_awal'] ?? ''));
+        $r_alasan              = mysqli_real_escape_string($koneksi, trim($_POST['alasan'] ?? ''));
+        $r_keluhan_utama       = mysqli_real_escape_string($koneksi, trim($_POST['keluhan_utama'] ?? ''));
+        $r_pemeriksaan_fisik   = mysqli_real_escape_string($koneksi, trim($_POST['pemeriksaan_fisik'] ?? ''));
+        $r_jalannya_penyakit   = mysqli_real_escape_string($koneksi, trim($_POST['jalannya_penyakit'] ?? ''));
+        $r_pemeriksaan_penunjang = mysqli_real_escape_string($koneksi, trim($_POST['pemeriksaan_penunjang'] ?? ''));
+        $r_hasil_laborat       = mysqli_real_escape_string($koneksi, trim($_POST['hasil_laborat'] ?? ''));
+        $r_tindakan_dan_operasi = mysqli_real_escape_string($koneksi, trim($_POST['tindakan_dan_operasi'] ?? ''));
+        $r_obat_di_rs          = mysqli_real_escape_string($koneksi, trim($_POST['obat_di_rs'] ?? ''));
+        $r_diagnosa_utama      = mysqli_real_escape_string($koneksi, trim($_POST['diagnosa_utama'] ?? ''));
+        $r_kd_diagnosa_utama   = mysqli_real_escape_string($koneksi, trim($_POST['kd_diagnosa_utama'] ?? ''));
+        $r_diagnosa_sekunder   = mysqli_real_escape_string($koneksi, trim($_POST['diagnosa_sekunder'] ?? ''));
+        $r_kd_diagnosa_sekunder = mysqli_real_escape_string($koneksi, trim($_POST['kd_diagnosa_sekunder'] ?? ''));
+        $r_diagnosa_sekunder2  = mysqli_real_escape_string($koneksi, trim($_POST['diagnosa_sekunder2'] ?? ''));
+        $r_kd_diagnosa_sekunder2 = mysqli_real_escape_string($koneksi, trim($_POST['kd_diagnosa_sekunder2'] ?? ''));
+        $r_diagnosa_sekunder3  = mysqli_real_escape_string($koneksi, trim($_POST['diagnosa_sekunder3'] ?? ''));
+        $r_kd_diagnosa_sekunder3 = mysqli_real_escape_string($koneksi, trim($_POST['kd_diagnosa_sekunder3'] ?? ''));
+        $r_diagnosa_sekunder4  = mysqli_real_escape_string($koneksi, trim($_POST['diagnosa_sekunder4'] ?? ''));
+        $r_kd_diagnosa_sekunder4 = mysqli_real_escape_string($koneksi, trim($_POST['kd_diagnosa_sekunder4'] ?? ''));
+        $r_prosedur_utama      = mysqli_real_escape_string($koneksi, trim($_POST['prosedur_utama'] ?? ''));
+        $r_kd_prosedur_utama   = mysqli_real_escape_string($koneksi, trim($_POST['kd_prosedur_utama'] ?? ''));
+        $r_prosedur_sekunder   = mysqli_real_escape_string($koneksi, trim($_POST['prosedur_sekunder'] ?? ''));
+        $r_kd_prosedur_sekunder = mysqli_real_escape_string($koneksi, trim($_POST['kd_prosedur_sekunder'] ?? ''));
+        $r_prosedur_sekunder2  = mysqli_real_escape_string($koneksi, trim($_POST['prosedur_sekunder2'] ?? ''));
+        $r_kd_prosedur_sekunder2 = mysqli_real_escape_string($koneksi, trim($_POST['kd_prosedur_sekunder2'] ?? ''));
+        $r_prosedur_sekunder3  = mysqli_real_escape_string($koneksi, trim($_POST['prosedur_sekunder3'] ?? ''));
+        $r_kd_prosedur_sekunder3 = mysqli_real_escape_string($koneksi, trim($_POST['kd_prosedur_sekunder3'] ?? ''));
+        $r_alergi              = mysqli_real_escape_string($koneksi, trim($_POST['alergi'] ?? ''));
+        $r_diet                = mysqli_real_escape_string($koneksi, trim($_POST['diet'] ?? ''));
+        $r_lab_belum           = mysqli_real_escape_string($koneksi, trim($_POST['lab_belum'] ?? ''));
+        $r_edukasi             = mysqli_real_escape_string($koneksi, trim($_POST['edukasi'] ?? ''));
+        $r_cara_keluar         = mysqli_real_escape_string($koneksi, trim($_POST['cara_keluar'] ?? 'Atas Izin Dokter'));
+        $r_ket_keluar          = mysqli_real_escape_string($koneksi, trim($_POST['ket_keluar'] ?? ''));
+        $r_keadaan             = mysqli_real_escape_string($koneksi, trim($_POST['keadaan'] ?? 'Membaik'));
+        $r_ket_keadaan         = mysqli_real_escape_string($koneksi, trim($_POST['ket_keadaan'] ?? ''));
+        $r_dilanjutkan         = mysqli_real_escape_string($koneksi, trim($_POST['dilanjutkan'] ?? 'Kembali Ke RS'));
+        $r_ket_dilanjutkan     = mysqli_real_escape_string($koneksi, trim($_POST['ket_dilanjutkan'] ?? ''));
+        $r_kontrol             = !empty($_POST['kontrol']) ? mysqli_real_escape_string($koneksi, trim($_POST['kontrol'])) : '0000-00-00 00:00:00';
+        $r_obat_pulang         = mysqli_real_escape_string($koneksi, trim($_POST['obat_pulang'] ?? ''));
+
+        if ($is_super_admin && !empty($_POST['kd_dokter_dpjp'])) {
+            $r_kd_dokter = mysqli_real_escape_string($koneksi, trim($_POST['kd_dokter_dpjp']));
+        } else {
+            $r_kd_dokter = !empty($kd_dokter) ? $kd_dokter : $username;
+        }
+
+        if (empty($r_no_rawat)) {
+            $pesan_error = "No. Rawat tidak valid.";
+        } else {
+            $query_resume = "REPLACE INTO resume_pasien_ranap (
+                no_rawat, kd_dokter, diagnosa_awal, alasan, keluhan_utama, pemeriksaan_fisik,
+                jalannya_penyakit, pemeriksaan_penunjang, hasil_laborat, tindakan_dan_operasi,
+                obat_di_rs, diagnosa_utama, kd_diagnosa_utama, diagnosa_sekunder, kd_diagnosa_sekunder,
+                diagnosa_sekunder2, kd_diagnosa_sekunder2, diagnosa_sekunder3, kd_diagnosa_sekunder3,
+                diagnosa_sekunder4, kd_diagnosa_sekunder4, prosedur_utama, kd_prosedur_utama,
+                prosedur_sekunder, kd_prosedur_sekunder, prosedur_sekunder2, kd_prosedur_sekunder2,
+                prosedur_sekunder3, kd_prosedur_sekunder3, alergi, diet, lab_belum, edukasi,
+                cara_keluar, ket_keluar, keadaan, ket_keadaan, dilanjutkan, ket_dilanjutkan,
+                kontrol, obat_pulang
+            ) VALUES (
+                '$r_no_rawat', '$r_kd_dokter', '$r_diagnosa_awal', '$r_alasan', '$r_keluhan_utama', '$r_pemeriksaan_fisik',
+                '$r_jalannya_penyakit', '$r_pemeriksaan_penunjang', '$r_hasil_laborat', '$r_tindakan_dan_operasi',
+                '$r_obat_di_rs', '$r_diagnosa_utama', '$r_kd_diagnosa_utama', '$r_diagnosa_sekunder', '$r_kd_diagnosa_sekunder',
+                '$r_diagnosa_sekunder2', '$r_kd_diagnosa_sekunder2', '$r_diagnosa_sekunder3', '$r_kd_diagnosa_sekunder3',
+                '$r_diagnosa_sekunder4', '$r_kd_diagnosa_sekunder4', '$r_prosedur_utama', '$r_kd_prosedur_utama',
+                '$r_prosedur_sekunder', '$r_kd_prosedur_sekunder', '$r_prosedur_sekunder2', '$r_kd_prosedur_sekunder2',
+                '$r_prosedur_sekunder3', '$r_kd_prosedur_sekunder3', '$r_alergi', '$r_diet', '$r_lab_belum', '$r_edukasi',
+                '$r_cara_keluar', '$r_ket_keluar', '$r_keadaan', '$r_ket_keadaan', '$r_dilanjutkan', '$r_ket_dilanjutkan',
+                '$r_kontrol', '$r_obat_pulang'
+            )";
+
+            if (mysqli_query($koneksi, $query_resume)) {
+                $pesan_sukses = "Resume Rawat Inap No. Rawat $r_no_rawat berhasil disimpan!";
+            } else {
+                $pesan_error = "Gagal menyimpan Resume Rawat Inap: " . mysqli_error($koneksi);
+            }
+        }
+    }
+}
+
 // Query untuk mengambil data pasien DPJP dengan status pemeriksaan hari ini
 $tanggal_hari_ini = date('Y-m-d');
 $data_pasien = array();
@@ -94,7 +180,13 @@ if ($is_super_admin || $kd_dokter) {
                     FROM kamar_inap ki2 
                     WHERE ki2.no_rawat = dpjp_ranap.no_rawat
                 )) = CURDATE() THEN 1 ELSE 0 
-            END as pasien_baru_hari_ini
+            END as pasien_baru_hari_ini,
+            CASE 
+                WHEN EXISTS (
+                    SELECT 1 FROM resume_pasien_ranap 
+                    WHERE resume_pasien_ranap.no_rawat = dpjp_ranap.no_rawat
+                ) THEN 1 ELSE 0 
+            END as sudah_resume
         FROM dpjp_ranap
         INNER JOIN reg_periksa ON dpjp_ranap.no_rawat = reg_periksa.no_rawat
         INNER JOIN penjab ON reg_periksa.kd_pj = penjab.kd_pj
@@ -129,7 +221,13 @@ if ($is_super_admin || $kd_dokter) {
                     FROM kamar_inap ki2 
                     WHERE ki2.no_rawat = dpjp_ranap.no_rawat
                 )) = CURDATE() THEN 1 ELSE 0 
-            END as pasien_baru_hari_ini
+            END as pasien_baru_hari_ini,
+            CASE 
+                WHEN EXISTS (
+                    SELECT 1 FROM resume_pasien_ranap 
+                    WHERE resume_pasien_ranap.no_rawat = dpjp_ranap.no_rawat
+                ) THEN 1 ELSE 0 
+            END as sudah_resume
         FROM dpjp_ranap
         INNER JOIN reg_periksa ON dpjp_ranap.no_rawat = reg_periksa.no_rawat
         INNER JOIN penjab ON reg_periksa.kd_pj = penjab.kd_pj
@@ -567,6 +665,40 @@ $total_pasien = count($data_pasien);
             background: #dcfce7;
         }
 
+        .btn-resume-action {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 9px 12px;
+            border-radius: 8px;
+            border: none;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        .btn-resume-action:active {
+            transform: scale(0.98);
+        }
+        .btn-resume-action.belum {
+            background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+            color: white;
+        }
+        .btn-resume-action.belum:hover {
+            opacity: 0.95;
+        }
+        .btn-resume-action.sudah {
+            background: #f0fdfa;
+            color: #0f766e;
+            border: 1px solid #99f6e4;
+        }
+        .btn-resume-action.sudah:hover {
+            background: #ccfbf1;
+        }
+
         /* Desktop Table View */
         .table-responsive {
             background: white;
@@ -609,9 +741,9 @@ $total_pasien = count($data_pasien);
         .row-baru  { background-color: #eff6ff !important; }
 
         .btn-table-soapie {
-            padding: 6px 12px;
+            padding: 6px 10px;
             border-radius: 6px;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
             border: none;
             cursor: pointer;
@@ -629,6 +761,53 @@ $total_pasien = count($data_pasien);
             background: #dcfce7;
             color: #15803d;
             border: 1px solid #bbf7d0;
+        }
+
+        .btn-table-resume {
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .btn-table-resume.belum {
+            background: #0d9488;
+            color: white;
+        }
+        .btn-table-resume.belum:hover {
+            background: #0f766e;
+        }
+        .btn-table-resume.sudah {
+            background: #ccfbf1;
+            color: #115e59;
+            border: 1px solid #99f6e4;
+        }
+        .btn-table-resume.sudah:hover {
+            background: #99f6e4;
+        }
+
+        .btn-submit-resume {
+            background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(13, 148, 136, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-submit-resume:hover {
+            opacity: 0.95;
         }
 
         /* Modal Styles */
@@ -1061,15 +1240,25 @@ $total_pasien = count($data_pasien);
                         <?php endif; ?>
                     </div>
 
-                    <!-- Tombol Isi / Copy SOAPIE Mobile -->
-                    <div class="card-action-bar">
+                    <!-- Tombol Aksi SOAPIE & Resume Mobile -->
+                    <div class="card-action-bar" style="display: flex; gap: 8px;">
                         <?php if ($pasien['sudah_periksa']): ?>
-                            <button type="button" class="btn-soapie-action btn-action-sudah" onclick='bukaModalSoapie(<?php echo $json_patient; ?>)'>
-                                <span>✏️ Edit / Tambah SOAPIE</span>
+                            <button type="button" class="btn-soapie-action btn-action-sudah" style="flex:1;" onclick='bukaModalSoapie(<?php echo $json_patient; ?>)'>
+                                <span>✏️ Edit SOAPIE</span>
                             </button>
                         <?php else: ?>
-                            <button type="button" class="btn-soapie-action btn-action-belum" onclick='bukaModalSoapie(<?php echo $json_patient; ?>)'>
-                                <span>📝 Isi / Copy SOAPIE</span>
+                            <button type="button" class="btn-soapie-action btn-action-belum" style="flex:1;" onclick='bukaModalSoapie(<?php echo $json_patient; ?>)'>
+                                <span>📝 Isi SOAPIE</span>
+                            </button>
+                        <?php endif; ?>
+
+                        <?php if (!empty($pasien['sudah_resume'])): ?>
+                            <button type="button" class="btn-resume-action sudah" onclick='bukaModalResume(<?php echo $json_patient; ?>)'>
+                                <span>📑 Edit Resume</span>
+                            </button>
+                        <?php else: ?>
+                            <button type="button" class="btn-resume-action belum" onclick='bukaModalResume(<?php echo $json_patient; ?>)'>
+                                <span>📋 Resume Ranap</span>
                             </button>
                         <?php endif; ?>
                     </div>
@@ -1093,7 +1282,7 @@ $total_pasien = count($data_pasien);
                         <th>Bangsal / Kamar</th>
                         <th>Diagnosa Awal</th>
                         <th>Status</th>
-                        <th style="text-align:center; width: 140px;">Aksi</th>
+                        <th style="text-align:center; min-width: 200px;">Aksi</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1120,7 +1309,8 @@ $total_pasien = count($data_pasien);
                             'nm_pasien'     => $pasien['nm_pasien'],
                             'nm_bangsal'    => $pasien['nm_bangsal'],
                             'kd_kamar'      => $pasien['kd_kamar'],
-                            'kd_dokter'     => $pasien['kd_dokter'] ?? ''
+                            'kd_dokter'     => $pasien['kd_dokter'] ?? '',
+                            'diagnosa_awal' => $pasien['diagnosa_awal'] ?? ''
                         ]), ENT_QUOTES, 'UTF-8');
                     ?>
                         <tr class="<?php echo $row_class; ?>" data-status="<?php echo $status_key; ?>" data-search="<?php echo strtolower($pasien['nm_pasien'] . ' ' . $pasien['no_rkm_medis'] . ' ' . $pasien['no_rawat'] . ' ' . $pasien['nm_bangsal'] . ' ' . $pasien['kd_kamar'] . ' ' . $pasien['diagnosa_awal']); ?>">
@@ -1135,16 +1325,28 @@ $total_pasien = count($data_pasien);
                             <td><?php echo htmlspecialchars($pasien['nm_bangsal']); ?> <small style="color:var(--gray);">(<?php echo htmlspecialchars($pasien['kd_kamar']); ?>)</small></td>
                             <td><?php echo !empty($pasien['diagnosa_awal']) ? htmlspecialchars($pasien['diagnosa_awal']) : '-'; ?></td>
                             <td><?php echo $badge; ?></td>
-                            <td style="text-align:center;">
-                                <?php if ($pasien['sudah_periksa']): ?>
-                                    <button type="button" class="btn-table-soapie sudah" onclick='bukaModalSoapie(<?php echo $json_patient; ?>)'>
-                                        ✏️ Edit SOAPIE
-                                    </button>
-                                <?php else: ?>
-                                    <button type="button" class="btn-table-soapie belum" onclick='bukaModalSoapie(<?php echo $json_patient; ?>)'>
-                                        📝 Isi SOAPIE
-                                    </button>
-                                <?php endif; ?>
+                            <td style="text-align:center; white-space:nowrap;">
+                                <div style="display:inline-flex; gap:6px;">
+                                    <?php if ($pasien['sudah_periksa']): ?>
+                                        <button type="button" class="btn-table-soapie sudah" onclick='bukaModalSoapie(<?php echo $json_patient; ?>)'>
+                                            ✏️ SOAPIE
+                                        </button>
+                                    <?php else: ?>
+                                        <button type="button" class="btn-table-soapie belum" onclick='bukaModalSoapie(<?php echo $json_patient; ?>)'>
+                                            📝 SOAPIE
+                                        </button>
+                                    <?php endif; ?>
+
+                                    <?php if (!empty($pasien['sudah_resume'])): ?>
+                                        <button type="button" class="btn-table-resume sudah" onclick='bukaModalResume(<?php echo $json_patient; ?>)'>
+                                            📑 Resume
+                                        </button>
+                                    <?php else: ?>
+                                        <button type="button" class="btn-table-resume belum" onclick='bukaModalResume(<?php echo $json_patient; ?>)'>
+                                            📋 Resume
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -1294,6 +1496,288 @@ $total_pasien = count($data_pasien);
                 <button type="submit" name="simpan_soapie" class="btn-submit-soap">
                     <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                     <span>Simpan Pemeriksaan</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Input / Edit Resume Pasien Ranap -->
+<div id="modalResume" class="modal">
+    <div class="modal-content" style="max-width: 960px;">
+        <button type="button" class="modal-close" onclick="tutupModalResume()">&times;</button>
+        
+        <h3 class="modal-header-title" style="color:#0f766e;">📑 Resume Pasien Rawat Inap</h3>
+        <p style="font-size: 12px; color: var(--gray); margin-bottom: 8px;">Pengisian ringkasan keluar / resume medis pasien rawat inap (tabel <code>resume_pasien_ranap</code>)</p>
+
+        <!-- Ringkasan Pasien -->
+        <div class="patient-summary-box">
+            <div>Pasien: <strong id="res_nama_pasien">-</strong></div>
+            <div>No. RM: <strong id="res_no_rm">-</strong></div>
+            <div>No. Rawat: <strong id="res_no_rawat_disp" style="font-family:monospace;">-</strong></div>
+            <div>Kamar: <strong id="res_kamar_bangsal">-</strong></div>
+        </div>
+
+        <!-- Alert Status Fetching -->
+        <div id="res_source_alert" class="source-alert loading">
+            <span id="res_source_text">⏳ Sedang memeriksa data resume rawat inap...</span>
+            <button type="button" id="btn_clear_resume_form" class="btn-reset-form" onclick="resetFormResumeKosong()" style="display:none;">🔄 Kosongkan Form</button>
+        </div>
+
+        <form method="POST" action="" id="formResume">
+            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+            <input type="hidden" name="no_rawat" id="res_no_rawat">
+            <input type="hidden" name="kd_dokter_dpjp" id="res_kd_dokter_dpjp">
+
+            <!-- 1. Riwayat & Kondisi Masuk -->
+            <div class="section-label" style="color: #0f766e; border-color: #ccfbf1;">
+                <span>🩺</span> Riwayat Masuk & Anamnesa
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-field">
+                    <label>Diagnosa Awal</label>
+                    <input type="text" name="diagnosa_awal" id="res_diagnosa_awal" placeholder="Diagnosa saat awal masuk...">
+                </div>
+                <div class="form-field">
+                    <label>Alasan Masuk Dirawat</label>
+                    <input type="text" name="alasan" id="res_alasan" placeholder="Alasan indikasi rawat inap...">
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-field">
+                    <label>Keluhan Utama</label>
+                    <textarea name="keluhan_utama" id="res_keluhan_utama" rows="2" placeholder="Keluhan utama saat masuk..."></textarea>
+                </div>
+                <div class="form-field">
+                    <label>Pemeriksaan Fisik</label>
+                    <textarea name="pemeriksaan_fisik" id="res_pemeriksaan_fisik" rows="2" placeholder="Pemeriksaan fisik penting..."></textarea>
+                </div>
+            </div>
+
+            <div class="form-field">
+                <label>Jalannya Penyakit Selama Perawatan</label>
+                <textarea name="jalannya_penyakit" id="res_jalannya_penyakit" rows="2" placeholder="Perkembangan kondisi dan jalannya perawatan..."></textarea>
+            </div>
+
+            <!-- 2. Pemeriksaan Penunjang & Terapi Selama di RS -->
+            <div class="section-label" style="color: #0f766e; border-color: #ccfbf1;">
+                <span>🔬</span> Pemeriksaan Penunjang & Terapi Selama di RS
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-field">
+                    <label>Pemeriksaan Penunjang (Radiologi, EKG, dll)</label>
+                    <textarea name="pemeriksaan_penunjang" id="res_pemeriksaan_penunjang" rows="2" placeholder="Hasil rontgen, USG, CT-scan, dsb..."></textarea>
+                </div>
+                <div class="form-field">
+                    <label>Hasil Laboratorium Penting</label>
+                    <textarea name="hasil_laborat" id="res_hasil_laborat" rows="2" placeholder="Hasil lab darah, urin, dsb..."></textarea>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-field">
+                    <label>Tindakan & Operasi</label>
+                    <textarea name="tindakan_dan_operasi" id="res_tindakan_dan_operasi" rows="2" placeholder="Tindakan medis atau operasi yang dilakukan..."></textarea>
+                </div>
+                <div class="form-field">
+                    <label>Obat Selama di Rumah Sakit</label>
+                    <textarea name="obat_di_rs" id="res_obat_di_rs" rows="2" placeholder="Obat/infus/injeksi yang diberikan selama ranap..."></textarea>
+                </div>
+            </div>
+
+            <!-- 3. Diagnosa & Prosedur Akhir (ICD 10 & 9) -->
+            <div class="section-label" style="color: #0f766e; border-color: #ccfbf1;">
+                <span>📋</span> Diagnosa & Prosedur Akhir
+            </div>
+
+            <!-- Diagnosa Utama -->
+            <div style="display:grid; grid-template-columns: 3fr 1fr; gap: 12px;">
+                <div class="form-field">
+                    <label>Diagnosa Utama <span style="color:#ef4444;">*</span></label>
+                    <input type="text" name="diagnosa_utama" id="res_diagnosa_utama" placeholder="Nama Diagnosa Utama..." required>
+                </div>
+                <div class="form-field">
+                    <label>Kode ICD-10 Utama</label>
+                    <input type="text" name="kd_diagnosa_utama" id="res_kd_diagnosa_utama" placeholder="Kode ICD-10">
+                </div>
+            </div>
+
+            <!-- Diagnosa Sekunder 1 & 2 -->
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div style="display:grid; grid-template-columns: 3fr 1fr; gap: 8px;">
+                    <div class="form-field">
+                        <label>Diagnosa Sekunder 1</label>
+                        <input type="text" name="diagnosa_sekunder" id="res_diagnosa_sekunder" placeholder="Diagnosa sekunder 1...">
+                    </div>
+                    <div class="form-field">
+                        <label>Kode</label>
+                        <input type="text" name="kd_diagnosa_sekunder" id="res_kd_diagnosa_sekunder" placeholder="ICD-10">
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns: 3fr 1fr; gap: 8px;">
+                    <div class="form-field">
+                        <label>Diagnosa Sekunder 2</label>
+                        <input type="text" name="diagnosa_sekunder2" id="res_diagnosa_sekunder2" placeholder="Diagnosa sekunder 2...">
+                    </div>
+                    <div class="form-field">
+                        <label>Kode</label>
+                        <input type="text" name="kd_diagnosa_sekunder2" id="res_kd_diagnosa_sekunder2" placeholder="ICD-10">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Diagnosa Sekunder 3 & 4 -->
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div style="display:grid; grid-template-columns: 3fr 1fr; gap: 8px;">
+                    <div class="form-field">
+                        <label>Diagnosa Sekunder 3</label>
+                        <input type="text" name="diagnosa_sekunder3" id="res_diagnosa_sekunder3" placeholder="Diagnosa sekunder 3...">
+                    </div>
+                    <div class="form-field">
+                        <label>Kode</label>
+                        <input type="text" name="kd_diagnosa_sekunder3" id="res_kd_diagnosa_sekunder3" placeholder="ICD-10">
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns: 3fr 1fr; gap: 8px;">
+                    <div class="form-field">
+                        <label>Diagnosa Sekunder 4</label>
+                        <input type="text" name="diagnosa_sekunder4" id="res_diagnosa_sekunder4" placeholder="Diagnosa sekunder 4...">
+                    </div>
+                    <div class="form-field">
+                        <label>Kode</label>
+                        <input type="text" name="kd_diagnosa_sekunder4" id="res_kd_diagnosa_sekunder4" placeholder="ICD-10">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prosedur Utama & Sekunder -->
+            <div style="display:grid; grid-template-columns: 3fr 1fr; gap: 12px; margin-top: 6px;">
+                <div class="form-field">
+                    <label>Prosedur / Tindakan Utama</label>
+                    <input type="text" name="prosedur_utama" id="res_prosedur_utama" placeholder="Nama Prosedur Utama...">
+                </div>
+                <div class="form-field">
+                    <label>Kode ICD-9 Utama</label>
+                    <input type="text" name="kd_prosedur_utama" id="res_kd_prosedur_utama" placeholder="Kode ICD-9">
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div style="display:grid; grid-template-columns: 3fr 1fr; gap: 8px;">
+                    <div class="form-field">
+                        <label>Prosedur Sekunder 1</label>
+                        <input type="text" name="prosedur_sekunder" id="res_prosedur_sekunder" placeholder="Prosedur sekunder 1...">
+                    </div>
+                    <div class="form-field">
+                        <label>Kode</label>
+                        <input type="text" name="kd_prosedur_sekunder" id="res_kd_prosedur_sekunder" placeholder="ICD-9">
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns: 3fr 1fr; gap: 8px;">
+                    <div class="form-field">
+                        <label>Prosedur Sekunder 2</label>
+                        <input type="text" name="prosedur_sekunder2" id="res_prosedur_sekunder2" placeholder="Prosedur sekunder 2...">
+                    </div>
+                    <div class="form-field">
+                        <label>Kode</label>
+                        <input type="text" name="kd_prosedur_sekunder2" id="res_kd_prosedur_sekunder2" placeholder="ICD-9">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. Instruksi & Kondisi Pasien Pulang -->
+            <div class="section-label" style="color: #0f766e; border-color: #ccfbf1;">
+                <span>🚪</span> Status Keluar & Edukasi Pulang
+            </div>
+
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                <div class="form-field">
+                    <label>Cara Keluar</label>
+                    <select name="cara_keluar" id="res_cara_keluar">
+                        <option value="Atas Izin Dokter">Atas Izin Dokter</option>
+                        <option value="Pindah RS">Pindah RS</option>
+                        <option value="Pulang Atas Permintaan Sendiri">Pulang Atas Permintaan Sendiri</option>
+                        <option value="Lainnya">Lainnya</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label>Keterangan Keluar</label>
+                    <input type="text" name="ket_keluar" id="res_ket_keluar" placeholder="Keterangan cara keluar...">
+                </div>
+                <div class="form-field">
+                    <label>Keadaan Saat Keluar</label>
+                    <select name="keadaan" id="res_keadaan">
+                        <option value="Membaik">Membaik</option>
+                        <option value="Sembuh">Sembuh</option>
+                        <option value="Keadaan Khusus">Keadaan Khusus</option>
+                        <option value="Meninggal">Meninggal</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                <div class="form-field">
+                    <label>Keterangan Keadaan</label>
+                    <input type="text" name="ket_keadaan" id="res_ket_keadaan" placeholder="Keterangan keadaan...">
+                </div>
+                <div class="form-field">
+                    <label>Pengobatan Dilanjutkan Ke</label>
+                    <select name="dilanjutkan" id="res_dilanjutkan">
+                        <option value="Kembali Ke RS">Kembali Ke RS</option>
+                        <option value="RS Lain">RS Lain</option>
+                        <option value="Dokter Luar">Dokter Luar</option>
+                        <option value="Puskesmes">Puskesmes</option>
+                        <option value="Lainnya">Lainnya</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label>Keterangan Dilanjutkan</label>
+                    <input type="text" name="ket_dilanjutkan" id="res_ket_dilanjutkan" placeholder="Keterangan lanjutan...">
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-field">
+                    <label>Jadwal Kontrol Selanjutnya</label>
+                    <input type="datetime-local" name="kontrol" id="res_kontrol">
+                </div>
+                <div class="form-field">
+                    <label>Alergi</label>
+                    <input type="text" name="alergi" id="res_alergi" placeholder="Riwayat alergi...">
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-field">
+                    <label>Diet Pulang</label>
+                    <textarea name="diet" id="res_diet" rows="2" placeholder="Instruksi diet / pantangan makanan..."></textarea>
+                </div>
+                <div class="form-field">
+                    <label>Edukasi / Instruksi Pulang</label>
+                    <textarea name="edukasi" id="res_edukasi" rows="2" placeholder="Edukasi perawatan di rumah..."></textarea>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-field">
+                    <label>Hasil Lab yang Belum Selesai</label>
+                    <textarea name="lab_belum" id="res_lab_belum" rows="2" placeholder="Pemeriksaan lab/penunjang yang masih ditunggu..."></textarea>
+                </div>
+                <div class="form-field">
+                    <label>Obat Pulang / Terapi Lanjutan</label>
+                    <textarea name="obat_pulang" id="res_obat_pulang" rows="2" placeholder="Resep atau daftar obat yang dibawa pulang..."></textarea>
+                </div>
+            </div>
+
+            <!-- Footer Action Buttons -->
+            <div class="modal-action-footer">
+                <button type="button" class="btn-cancel" onclick="tutupModalResume()">Batal</button>
+                <button type="submit" name="simpan_resume" class="btn-submit-resume">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    <span>Simpan Resume Ranap</span>
                 </button>
             </div>
         </form>
@@ -1459,9 +1943,139 @@ $total_pasien = count($data_pasien);
         document.body.style.overflow = 'auto';
     }
 
+    // Modal Resume Ranap Logic
+    const modalResume = document.getElementById('modalResume');
+
+    function bukaModalResume(patient) {
+        document.getElementById('res_nama_pasien').textContent = patient.nm_pasien || '-';
+        document.getElementById('res_no_rm').textContent = patient.no_rkm_medis || '-';
+        document.getElementById('res_no_rawat_disp').textContent = patient.no_rawat || '-';
+        document.getElementById('res_no_rawat').value = patient.no_rawat || '';
+        document.getElementById('res_kd_dokter_dpjp').value = patient.kd_dokter || '';
+
+        const kamarBangsal = (patient.nm_bangsal || '-') + (patient.kd_kamar ? ' (' + patient.kd_kamar + ')' : '');
+        document.getElementById('res_kamar_bangsal').textContent = kamarBangsal;
+
+        resetFormResumeKosong();
+
+        // Default prefill diagnosa awal dari data tabel
+        if (patient.diagnosa_awal && patient.diagnosa_awal !== '-') {
+            document.getElementById('res_diagnosa_awal').value = patient.diagnosa_awal;
+        }
+
+        const alertBox = document.getElementById('res_source_alert');
+        const alertText = document.getElementById('res_source_text');
+        const btnClear = document.getElementById('btn_clear_resume_form');
+
+        alertBox.className = 'source-alert loading';
+        alertText.innerHTML = '⏳ Mengambil data Resume Ranap...';
+        btnClear.style.display = 'none';
+
+        modalResume.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+
+        fetch('get_resume_ranap.php?no_rawat=' + encodeURIComponent(patient.no_rawat))
+            .then(res => res.json())
+            .then(res => {
+                if (res.status === 'success' && res.found && res.data) {
+                    const d = res.data;
+                    document.getElementById('res_diagnosa_awal').value = d.diagnosa_awal || '';
+                    document.getElementById('res_alasan').value = d.alasan || '';
+                    document.getElementById('res_keluhan_utama').value = d.keluhan_utama || '';
+                    document.getElementById('res_pemeriksaan_fisik').value = d.pemeriksaan_fisik || '';
+                    document.getElementById('res_jalannya_penyakit').value = d.jalannya_penyakit || '';
+                    document.getElementById('res_pemeriksaan_penunjang').value = d.pemeriksaan_penunjang || '';
+                    document.getElementById('res_hasil_laborat').value = d.hasil_laborat || '';
+                    document.getElementById('res_tindakan_dan_operasi').value = d.tindakan_dan_operasi || '';
+                    document.getElementById('res_obat_di_rs').value = d.obat_di_rs || '';
+                    document.getElementById('res_diagnosa_utama').value = d.diagnosa_utama || '';
+                    document.getElementById('res_kd_diagnosa_utama').value = d.kd_diagnosa_utama || '';
+                    document.getElementById('res_diagnosa_sekunder').value = d.diagnosa_sekunder || '';
+                    document.getElementById('res_kd_diagnosa_sekunder').value = d.kd_diagnosa_sekunder || '';
+                    document.getElementById('res_diagnosa_sekunder2').value = d.diagnosa_sekunder2 || '';
+                    document.getElementById('res_kd_diagnosa_sekunder2').value = d.kd_diagnosa_sekunder2 || '';
+                    document.getElementById('res_diagnosa_sekunder3').value = d.diagnosa_sekunder3 || '';
+                    document.getElementById('res_kd_diagnosa_sekunder3').value = d.kd_diagnosa_sekunder3 || '';
+                    document.getElementById('res_diagnosa_sekunder4').value = d.diagnosa_sekunder4 || '';
+                    document.getElementById('res_kd_diagnosa_sekunder4').value = d.kd_diagnosa_sekunder4 || '';
+                    document.getElementById('res_prosedur_utama').value = d.prosedur_utama || '';
+                    document.getElementById('res_kd_prosedur_utama').value = d.kd_prosedur_utama || '';
+                    document.getElementById('res_prosedur_sekunder').value = d.prosedur_sekunder || '';
+                    document.getElementById('res_kd_prosedur_sekunder').value = d.kd_prosedur_sekunder || '';
+                    document.getElementById('res_prosedur_sekunder2').value = d.prosedur_sekunder2 || '';
+                    document.getElementById('res_kd_prosedur_sekunder2').value = d.kd_prosedur_sekunder2 || '';
+                    document.getElementById('res_prosedur_sekunder3').value = d.prosedur_sekunder3 || '';
+                    document.getElementById('res_kd_prosedur_sekunder3').value = d.kd_prosedur_sekunder3 || '';
+                    document.getElementById('res_alergi').value = d.alergi || '';
+                    document.getElementById('res_diet').value = d.diet || '';
+                    document.getElementById('res_lab_belum').value = d.lab_belum || '';
+                    document.getElementById('res_edukasi').value = d.edukasi || '';
+                    if (d.cara_keluar) document.getElementById('res_cara_keluar').value = d.cara_keluar;
+                    document.getElementById('res_ket_keluar').value = d.ket_keluar || '';
+                    if (d.keadaan) document.getElementById('res_keadaan').value = d.keadaan;
+                    document.getElementById('res_ket_keadaan').value = d.ket_keadaan || '';
+                    if (d.dilanjutkan) document.getElementById('res_dilanjutkan').value = d.dilanjutkan;
+                    document.getElementById('res_ket_dilanjutkan').value = d.ket_dilanjutkan || '';
+                    
+                    if (d.kontrol && d.kontrol !== '0000-00-00 00:00:00') {
+                        document.getElementById('res_kontrol').value = d.kontrol.replace(' ', 'T').substring(0, 16);
+                    }
+                    document.getElementById('res_obat_pulang').value = d.obat_pulang || '';
+
+                    alertBox.className = 'source-alert info';
+                    alertText.innerHTML = '📋 <strong>Data Resume ditemukan</strong>' + (d.nm_dokter ? ' (Dokter: ' + d.nm_dokter + ')' : '') + '. Anda dapat memperbarui data ini.';
+                    btnClear.style.display = 'inline-block';
+                } else {
+                    if (res.prefill && res.prefill.diagnosa_awal) {
+                        document.getElementById('res_diagnosa_awal').value = res.prefill.diagnosa_awal;
+                    }
+                    alertBox.className = 'source-alert empty';
+                    alertText.innerHTML = 'ℹ️ Belum ada Resume Rawat Inap untuk pasien ini. Silakan input resume baru.';
+                    btnClear.style.display = 'none';
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alertBox.className = 'source-alert empty';
+                alertText.innerHTML = 'ℹ️ Silakan input data resume pasien.';
+                btnClear.style.display = 'none';
+            });
+    }
+
+    function resetFormResumeKosong() {
+        const fields = [
+            'res_diagnosa_awal', 'res_alasan', 'res_keluhan_utama', 'res_pemeriksaan_fisik',
+            'res_jalannya_penyakit', 'res_pemeriksaan_penunjang', 'res_hasil_laborat',
+            'res_tindakan_dan_operasi', 'res_obat_di_rs', 'res_diagnosa_utama',
+            'res_kd_diagnosa_utama', 'res_diagnosa_sekunder', 'res_kd_diagnosa_sekunder',
+            'res_diagnosa_sekunder2', 'res_kd_diagnosa_sekunder2', 'res_diagnosa_sekunder3',
+            'res_kd_diagnosa_sekunder3', 'res_diagnosa_sekunder4', 'res_kd_diagnosa_sekunder4',
+            'res_prosedur_utama', 'res_kd_prosedur_utama', 'res_prosedur_sekunder',
+            'res_kd_prosedur_sekunder', 'res_prosedur_sekunder2', 'res_kd_prosedur_sekunder2',
+            'res_prosedur_sekunder3', 'res_kd_prosedur_sekunder3', 'res_alergi', 'res_diet',
+            'res_lab_belum', 'res_edukasi', 'res_ket_keluar', 'res_ket_keadaan',
+            'res_ket_dilanjutkan', 'res_kontrol', 'res_obat_pulang'
+        ];
+        fields.forEach(f => {
+            const el = document.getElementById(f);
+            if (el) el.value = '';
+        });
+        document.getElementById('res_cara_keluar').value = 'Atas Izin Dokter';
+        document.getElementById('res_keadaan').value = 'Membaik';
+        document.getElementById('res_dilanjutkan').value = 'Kembali Ke RS';
+    }
+
+    function tutupModalResume() {
+        modalResume.style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+
     window.onclick = function(event) {
         if (event.target === modalSoapie) {
             tutupModalSoapie();
+        }
+        if (event.target === modalResume) {
+            tutupModalResume();
         }
     };
 
