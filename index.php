@@ -31,6 +31,13 @@ if ($is_super_admin) {
     if ($q4) {
         $count_konsul = (int)mysqli_fetch_assoc($q4)['total'];
     }
+
+    // 5. Konsultasi Medik (Antar Dokter)
+    $count_konsul_medik = 0;
+    $q5 = mysqli_query($koneksi, "SELECT COUNT(*) as total FROM konsultasi_medik");
+    if ($q5) {
+        $count_konsul_medik = (int)mysqli_fetch_assoc($q5)['total'];
+    }
 } else if ($kd_dokter) {
     // 1. Rawat Jalan Hari Ini (Dokter)
     $stmt1 = mysqli_prepare($koneksi, "SELECT COUNT(*) as total FROM reg_periksa WHERE tgl_registrasi = CURDATE() AND status_lanjut = 'Ralan' AND kd_dokter = ?");
@@ -79,6 +86,19 @@ if ($is_super_admin) {
             $count_konsul = (int)$row4['total'];
         }
         mysqli_stmt_close($stmt4);
+    }
+
+    // 5. Konsultasi Medik (Dokter yang dikonsuli)
+    $count_konsul_medik = 0;
+    $stmt5 = mysqli_prepare($koneksi, "SELECT COUNT(*) as total FROM konsultasi_medik WHERE kd_dokter_dikonsuli = ?");
+    if ($stmt5) {
+        mysqli_stmt_bind_param($stmt5, "s", $kd_dokter);
+        mysqli_stmt_execute($stmt5);
+        $res5 = mysqli_stmt_get_result($stmt5);
+        if ($row5 = mysqli_fetch_assoc($res5)) {
+            $count_konsul_medik = (int)$row5['total'];
+        }
+        mysqli_stmt_close($stmt5);
     }
 }
 
@@ -402,6 +422,19 @@ $tgl_indo = date('j') . ' ' . $bulan_list[(int)date('n')] . ' ' . date('Y');
             color: #92400e;
         }
 
+        /* 5. Konsultasi Medik: Rose / Crimson */
+        .menu-card.card-konsul-medik {
+            border-left: 6px solid #e11d48;
+        }
+        .menu-card.card-konsul-medik .menu-icon-box {
+            background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
+            box-shadow: 0 4px 12px rgba(225, 29, 72, 0.3);
+        }
+        .menu-card.card-konsul-medik .count-badge {
+            background: #ffe4e6;
+            color: #9f1239;
+        }
+
         .menu-icon-box {
             width: 56px;
             height: 56px;
@@ -623,6 +656,31 @@ $tgl_indo = date('j') . ' ' . $bulan_list[(int)date('n')] . ' ' . date('Y');
                 </div>
                 <div class="menu-desc">
                     Jawab & verifikasi rekomendasi konsultasi metode SBAR dari perawat
+                </div>
+            </div>
+            <div class="menu-arrow">
+                <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+            </div>
+        </a>
+
+        <!-- 5. Konsultasi Medik (Antar Dokter) -->
+        <a href="konsultasi_medik.php" class="menu-card card-konsul-medik">
+            <div class="menu-icon-box">
+                <!-- Stethoscope / Doctor Consultation Icon -->
+                <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+            </div>
+            <div class="menu-content">
+                <div class="menu-title-row">
+                    <span class="menu-title">Konsultasi Medik</span>
+                    <span class="count-badge"><?php echo $count_konsul_medik; ?> Konsul</span>
+                </div>
+                <div class="menu-desc">
+                    Komunikasi & konsultasi antar dokter spesialis, alih rawat & rawat bersama
                 </div>
             </div>
             <div class="menu-arrow">
