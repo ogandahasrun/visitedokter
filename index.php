@@ -24,6 +24,13 @@ if ($is_super_admin) {
     if ($q3) {
         $count_operasi = (int)mysqli_fetch_assoc($q3)['total'];
     }
+
+    // 4. Konsultasi Perawat
+    $count_konsul = 0;
+    $q4 = mysqli_query($koneksi, "SELECT COUNT(*) as total FROM konsultasi_perawat");
+    if ($q4) {
+        $count_konsul = (int)mysqli_fetch_assoc($q4)['total'];
+    }
 } else if ($kd_dokter) {
     // 1. Rawat Jalan Hari Ini (Dokter)
     $stmt1 = mysqli_prepare($koneksi, "SELECT COUNT(*) as total FROM reg_periksa WHERE tgl_registrasi = CURDATE() AND status_lanjut = 'Ralan' AND kd_dokter = ?");
@@ -59,6 +66,19 @@ if ($is_super_admin) {
             $count_operasi = (int)$row3['total'];
         }
         mysqli_stmt_close($stmt3);
+    }
+
+    // 4. Konsultasi Perawat (Dokter yang dikonsuli)
+    $count_konsul = 0;
+    $stmt4 = mysqli_prepare($koneksi, "SELECT COUNT(*) as total FROM konsultasi_perawat WHERE kd_dokter_dikonsuli = ?");
+    if ($stmt4) {
+        mysqli_stmt_bind_param($stmt4, "s", $kd_dokter);
+        mysqli_stmt_execute($stmt4);
+        $res4 = mysqli_stmt_get_result($stmt4);
+        if ($row4 = mysqli_fetch_assoc($res4)) {
+            $count_konsul = (int)$row4['total'];
+        }
+        mysqli_stmt_close($stmt4);
     }
 }
 
@@ -369,6 +389,19 @@ $tgl_indo = date('j') . ' ' . $bulan_list[(int)date('n')] . ' ' . date('Y');
             color: #5b21b6;
         }
 
+        /* 4. Konsultasi Perawat: Amber / Orange */
+        .menu-card.card-konsul {
+            border-left: 6px solid #f59e0b;
+        }
+        .menu-card.card-konsul .menu-icon-box {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+        }
+        .menu-card.card-konsul .count-badge {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
         .menu-icon-box {
             width: 56px;
             height: 56px;
@@ -568,6 +601,28 @@ $tgl_indo = date('j') . ' ' . $bulan_list[(int)date('n')] . ' ' . date('Y');
                 </div>
                 <div class="menu-desc">
                     Jadwal & booking kamar operasi (OK), paket tindakan & operator
+                </div>
+            </div>
+            <div class="menu-arrow">
+                <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+            </div>
+        </a>
+
+        <!-- 4. Konsultasi Perawat -->
+        <a href="konsultasi_perawat.php" class="menu-card card-konsul">
+            <div class="menu-icon-box">
+                <!-- Chat / Consultation SBAR Icon -->
+                <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                </svg>
+            </div>
+            <div class="menu-content">
+                <div class="menu-title-row">
+                    <span class="menu-title">Konsultasi Perawat</span>
+                    <span class="count-badge"><?php echo $count_konsul; ?> Konsul</span>
+                </div>
+                <div class="menu-desc">
+                    Jawab & verifikasi rekomendasi konsultasi metode SBAR dari perawat
                 </div>
             </div>
             <div class="menu-arrow">
